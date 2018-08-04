@@ -1,0 +1,8 @@
+CREATE TABLE  `ef`.`ip_activity_logs` (
+  `id` INT(10) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `date` DATETIME(3) NOT NULL,
+  `ip` VARBINARY(16) NOT NULL,
+  `request` VARCHAR(50) NOT NULL,
+  `status` SMALLINT(3) UNSIGNED NOT NULL,
+  `user_agent` TEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;

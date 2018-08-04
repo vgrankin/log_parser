@@ -1,6 +1,7 @@
 package com.ef;
 
 import java.io.File;
+import java.sql.SQLException;
 import java.util.List;
 import org.junit.Assert;
 import org.junit.Test;
@@ -68,7 +69,8 @@ public class ParserTest
         parser.parse(filePath);
     }
 
-    public void testSaveLogEntries_whenCalledWithListOfEntryLogEntityItems_DataIsSavedToMySQLDatabase()
+    @Test
+    public void testSaveLogEntries_whenCalledWithListOfEntryLogEntityItems_DataIsSavedToMySQLDatabase() throws SQLException
     {
         File tmpFile = util.prepareTestFile(
             "2017-01-01 00:00:11.763|192.168.234.82|\"GET / HTTP/1.1\"|200|\"swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0\"\n"
@@ -78,6 +80,9 @@ public class ParserTest
 
         Parser parser = new Parser();
         List<LogEntry> list = parser.parse(filePath);
+        
+        // clear all table records
+        util.executeQuery("TRUNCATE TABLE ip_activity_logs");
         
         parser.saveLogEntries(list);
     }

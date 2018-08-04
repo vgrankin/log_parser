@@ -4,6 +4,10 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,5 +37,16 @@ public class TestUtils
         }
 
         return temp;
+    }  
+    
+    public static void executeQuery(String query) throws SQLException
+    {
+        Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);          
+        
+        PreparedStatement pstmtU;
+                
+        pstmtU = conn.prepareStatement(query);
+        
+        pstmtU.executeUpdate();
     }
 }
