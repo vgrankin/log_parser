@@ -34,7 +34,7 @@ public class LogEntryTest
         instance.setDate("2017-01-01 00:00:11.763");
         instance.ip = "192.168.234.82";
         instance.request = "GET / HTTP/1.1";
-        instance.status = 200;
+        instance.setStatus(200);
         instance.userAgent = "swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0";
         
         String result = instance.toString();

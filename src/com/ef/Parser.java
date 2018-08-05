@@ -1,109 +1,109 @@
 package com.ef;
 
-import com.sun.prism.impl.Disposer.Record;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Parser
 {
 
-    private static final String DELIMITER = Pattern.quote("|");
-    private static final int LOG_FILE_FIELDS_CNT = 5;
-
-    private enum Duration
-    {
-        HOURLY, DAILY
-    };
-
+    private static final String[] validOptions = new String[]{"startDate", "duration", "threshold"};
+    
     /**
-     * Parses given log file into a list of LogEntry items
-     *
-     * @param filePath Full path to log file to parse
-     * @return A list of LogEntry items. Each item contains details about corresponding line of given log file.
+     * Retrieve command-line args, check them and output above-threshold IPs (if any)
+     * 
+     * @param args 
      */
-    public List<LogEntry> parse(String filePath)
+    static public void main(String[] args)
     {
-        List<LogEntry> list = new ArrayList<>();
+        ParserModel parser = new ParserModel();
 
-        // reading log file into stream, try-with-resources
-        try (Stream<String> stream = Files.lines(Paths.get(filePath))) {
-            list = stream.map((String line) -> {
-                String[] p = line.split(DELIMITER);
-
-                if (p.length != LOG_FILE_FIELDS_CNT) {
-                    throw new IllegalArgumentException(
-                        "Parser expects that each line of log file contains exactly "
-                        + LOG_FILE_FIELDS_CNT + " fields. " + p.length + " field found."
-                    );
-                }
-
-                LogEntry item = new LogEntry();
-
-                try {
-                    item.setDate(p[0]);
-                } catch (DateTimeParseException e) {
-                    throw new IllegalArgumentException(
-                        "Unable to parse given date (" + p[0] + "). Please see LogEntry.formatter pattern for details"
-                    );
-                }
-
-                item.ip = p[1];
-                item.request = p[2].replace("\"", "");
-                item.status = Integer.valueOf(p[3]);
-                item.userAgent = p[4].replace("\"", "");
-
-                return item;
-            }).collect(Collectors.toList());
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
+        Map<String, String> options = getOptions(args);
+        if (options.size() != validOptions.length) {
+            throw new IllegalArgumentException(
+                "All " + validOptions.length + " options are expected: " + String.join(",", validOptions)
+            );
         }
 
-        return list;
+        String duration = options.get("duration").toUpperCase();
+        if (!isValidDuration(duration)) {
+            throw new IllegalArgumentException("Unknown duration: " + duration);
+        }
+
+        String startDateStr = options.get("startDate");
+        LocalDateTime startDate = null;
+        try {
+            startDate = parser.prepareDateArgument(startDateStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                "Expected date pattern: " + ParserModel.DATE_PATTERN
+            );
+        }
+
+        String thresholdStr = options.get("threshold");
+        int threshold;
+        try {
+            threshold = Integer.parseInt(thresholdStr);            
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                "Expected int value for threshold, actual: " + thresholdStr
+            );
+        }
+        
+        Map<String, Integer> result = parser.findAboveThresholdIPs(startDate, Duration.valueOf(duration), threshold);
+        System.out.println(result);
     }
 
     /**
-     * Save given list of LongEntry items to database
+     * Extract required options from args to run parser methods
      *
-     * @param list List of LogEntry items
+     * @param args
+     * @return
      */
-    public void saveLogEntries(List<LogEntry> list)
+    private static Map<String, String> getOptions(String[] args)
     {
-        try {
-            Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);
+        Map<String, String> options = new HashMap<>();
 
-            conn.setAutoCommit(false);
-            PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO ip_activity_logs (date, ip, request, status, user_agent) VALUES (?, ?, ?, ?, ?)"
-            );
-            for (LogEntry item : list) {
-                
-                ps.setObject(1, item.date);
-                ps.setString(2, item.ip);
-                ps.setString(3, item.request);
-                ps.setInt(4, item.status);
-                ps.setString(5, item.userAgent);
-                
-                ps.addBatch();
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].charAt(0) == '-') {
+                if (args[i].charAt(1) == '-') {
+                    if (args[i].length() < 3) {
+                        throw new IllegalArgumentException("Not a valid argument: " + args[i]);
+                    }
+
+                    String arg = args[i].substring(2, args[i].length());
+                    String[] keyVal = arg.split("=");
+                    if (keyVal.length != 2) {
+                        throw new IllegalArgumentException("Not a valid argument: " + args[i]);
+                    }
+
+                    String optionKey = keyVal[0];
+                    String optionVal = keyVal[1];
+
+                    if (!Arrays.asList(validOptions).contains(optionKey)) {
+                        throw new IllegalArgumentException("Not a valid argument: " + args[i]);
+                    }
+
+                    options.put(optionKey, optionVal);
+                } else {
+                    throw new IllegalArgumentException("Not a valid argument: " + args[i]);
+                }
             }
-            ps.executeBatch();
-            conn.commit();
-
-        } catch (SQLException ex) {
-            System.out.println("Unable to insert list of LogEntry items to database.");
-            Logger.getLogger(Parser.class.getName()).log(Level.SEVERE, null, ex);
         }
+
+        return options;
+    }
+
+    private static boolean isValidDuration(String duration)
+    {
+        for (Duration d : Duration.values()) {
+            if (d.name().equals(duration)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

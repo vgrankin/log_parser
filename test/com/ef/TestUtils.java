@@ -7,22 +7,25 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.format.DateTimeFormatter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class TestUtils
 {
+
     public static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
-    
+
     public static File prepareTestFile(String fileContent)
     {
         // Create temp file.
         File temp = null;
         try {
             temp = File.createTempFile("pattern", ".suffix");
-            
+
             // Delete temp file when program exits.
             temp.deleteOnExit();
 
@@ -37,16 +40,33 @@ public class TestUtils
         }
 
         return temp;
-    }  
-    
-    public static void executeQuery(String query) throws SQLException
+    }
+
+    public static void executeQuery(String query)
+        throws SQLException
     {
-        Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);          
-        
-        PreparedStatement pstmtU;
-                
-        pstmtU = conn.prepareStatement(query);
-        
-        pstmtU.executeUpdate();
+        PreparedStatement pstmtU = null;
+        try {
+            Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);
+
+            pstmtU = conn.prepareStatement(query);
+            pstmtU.executeUpdate();
+        } finally {
+            if (pstmtU != null) {
+                pstmtU.close();
+            }
+        }
+    }
+
+    public static ResultSet readDbRows(String query)
+        throws SQLException
+    {
+        Statement stmt = null;
+
+        Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);
+        stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery(query);
+
+        return rs;
     }
 }
