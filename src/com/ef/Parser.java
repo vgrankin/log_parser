@@ -53,7 +53,16 @@ public class Parser
         }
         
         Map<String, Integer> result = parser.findAboveThresholdIPs(startDate, Duration.valueOf(duration), threshold);
-        System.out.println(result);
+        
+        if (result.size() == 0) {
+            System.out.println("No above-threshold IPs for given arguments");
+        } else {
+            for (String ip : result.keySet()) {
+                System.out.println(ip);
+            }
+            
+            parser.logBlockedIPs(result, startDate, Duration.valueOf(duration), threshold);
+        }
     }
 
     /**

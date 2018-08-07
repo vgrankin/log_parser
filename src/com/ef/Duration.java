@@ -9,7 +9,12 @@ public enum Duration
     DAILY(60 * 24);
 
     public final int minutes;
-
+    
+    /**
+     * Construct Duration with given time in minutes
+     * 
+     * @param minutes How long this duration is
+     */
     private Duration(int minutes)
     {
         this.minutes = minutes;

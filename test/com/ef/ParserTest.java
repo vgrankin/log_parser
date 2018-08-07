@@ -5,9 +5,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javafx.util.Pair;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -326,5 +326,81 @@ public class ParserTest
         
         result = parser.getRequestsByIP(ipSecond);
         Assert.assertEquals(10, result.size());
+    }
+    
+    @Test
+    public void testLogBlockedIPs_givenListOfBlockedIPs_IPsWithCorrectBlockReasonAreSavedToDb() throws SQLException
+    {
+        String ipFirst = "1.1.1.1";
+        int ipFirstCnt = 211;        
+        
+        String ipSecond = "2.2.2.2";
+        int ipSecondCnt = 800;
+        
+        Map<String, Integer> blockedIps = new HashMap<>();
+        blockedIps.put(ipFirst, ipFirstCnt);
+        blockedIps.put(ipSecond, ipSecondCnt);
+        
+        LocalDateTime startDate = LocalDateTime.parse("2017-01-01 13:00:00.164", LogEntry.formatter);                        
+        
+        // check hourly duration
+        
+        // clear all table records
+        util.executeQuery("TRUNCATE TABLE blocked_ips");                
+        
+        Duration duration = Duration.HOURLY;
+        int threshold = 200;
+        
+        ParserModel parser = new ParserModel();
+        parser.logBlockedIPs(blockedIps, startDate, duration, threshold);
+        
+        String query
+            = "SELECT created_at"
+            + ", INET6_NTOA(`ip`) AS ip"
+            + ", reason"
+            + " FROM blocked_ips"
+            + " ORDER BY id";
+
+        ResultSet rs = util.readDbRows(query);                        
+        
+        rs.next();
+
+        LocalDateTime endDate = parser.getEndDate(startDate, duration);
+        String reason = duration.toString().toLowerCase() + " threshold (" + threshold + ") crossed "
+            + "(" + ipFirstCnt + ") in the following dates range: " 
+            + LogEntry.formatter.format(startDate) + " - " + LogEntry.formatter.format(endDate);        
+        
+        Assert.assertEquals(ipFirst, rs.getString("ip"));
+        Assert.assertEquals(reason, rs.getString("reason"));
+        
+        // check daily duration
+        
+        // clear all table records
+        util.executeQuery("TRUNCATE TABLE blocked_ips");             
+        
+        duration = Duration.DAILY;
+        threshold = 200;
+        
+        parser = new ParserModel();
+        parser.logBlockedIPs(blockedIps, startDate, duration, threshold);
+        
+        query
+            = "SELECT created_at"
+            + ", INET6_NTOA(`ip`) AS ip"
+            + ", reason"
+            + " FROM blocked_ips"
+            + " ORDER BY id";
+
+        rs = util.readDbRows(query);                        
+        
+        rs.next();
+
+        endDate = parser.getEndDate(startDate, duration);
+        reason = duration.toString().toLowerCase() + " threshold (" + threshold + ") crossed "
+            + "(" + ipFirstCnt + ") in the following dates range: " 
+            + LogEntry.formatter.format(startDate) + " - " + LogEntry.formatter.format(endDate);        
+        
+        Assert.assertEquals(ipFirst, rs.getString("ip"));
+        Assert.assertEquals(reason, rs.getString("reason"));
     }
 }

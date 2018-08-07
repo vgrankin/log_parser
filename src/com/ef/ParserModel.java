@@ -20,11 +20,10 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javafx.util.Pair;
 
 public class ParserModel
 {
-    
+
     private static final String DELIMITER = Pattern.quote("|");
     private static final int LOG_FILE_FIELDS_CNT = 5;
     public static final String DATE_PATTERN = "yyyy-MM-dd.HH:mm:ss";
@@ -148,7 +147,7 @@ public class ParserModel
 
             ps.executeBatch();
             conn.commit();
-
+            ps.close();
         } catch (SQLException ex) {
             System.out.println("Unable to insert list of LogEntry items to database.");
             Logger.getLogger(ParserModel.class.getName()).log(Level.SEVERE, null, ex);
@@ -161,12 +160,12 @@ public class ParserModel
      * @param startDate Date range start
      * @param duration Is used to calculate date range end value
      * @param threshold Look for IPs having more requests than given threshold in calculated date range/interval
-     * @return List of IPs having more than given threshold requests for calculated 
-     *         (based on StartDate and duration) date interval
+     * @return List of IPs having more than given threshold requests for calculated (based on StartDate and duration)
+     * date interval
      */
     public Map<String, Integer> findAboveThresholdIPs(LocalDateTime startDate, Duration duration, int threshold)
     {
-        LocalDateTime endDate = startDate.plusMinutes(duration.minutes);
+        LocalDateTime endDate = getEndDate(startDate, duration);
 
         String query
             = "SELECT INET6_NTOA(`ip`) AS ip"
@@ -191,7 +190,6 @@ public class ParserModel
             while (rs.next()) {
                 String ip = rs.getString("ip");
                 int cnt = rs.getInt("cnt");
-                Pair<String, Integer> pair = new Pair<>(ip, cnt);
                 map.put(ip, cnt);
             }
             rs.close();
@@ -205,6 +203,47 @@ public class ParserModel
     }
 
     /**
+     * Log/save to DB blocked IPs from a given ipList with comments on why they are blocked
+     *
+     * @param ipList List of blocked IPs
+     * @param startDate Starting date IPs were checked against
+     * @param duration Duration type used
+     * @param threshold Threshold used to identify if IP is to-be-blocked
+     */
+    public void logBlockedIPs(Map<String, Integer> ipList, LocalDateTime startDate, Duration duration, int threshold)
+    {
+        try {
+            Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);
+
+            conn.setAutoCommit(false);
+            PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO blocked_ips (ip, reason) VALUES (INET6_ATON(?), ?)"
+            );
+            
+            LocalDateTime endDate = getEndDate(startDate, duration);
+            for (Map.Entry<String, Integer> entry : ipList.entrySet()) {
+                String ip = entry.getKey();
+                int cnt = entry.getValue();
+                String reason = duration.toString().toLowerCase() + " threshold (" + threshold + ") crossed "
+                    + "(" + cnt + ") in the following dates range: " 
+                    + LogEntry.formatter.format(startDate) + " - " + LogEntry.formatter.format(endDate);
+                
+                ps.setString(1, ip);
+                ps.setString(2, reason);
+                
+                ps.addBatch();
+            }
+
+            ps.executeBatch();
+            conn.commit();
+            ps.close();
+        } catch (SQLException ex) {
+            System.out.println("Unable to insert list of blocked IPs to database.");
+            Logger.getLogger(ParserModel.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+    /**
      * Convert string date argument to LocalDateTime object
      *
      * @param dateStr String date having "yyyy-MM-dd.HH:mm:ss" format
@@ -214,5 +253,17 @@ public class ParserModel
     {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_PATTERN);
         return LocalDateTime.parse(dateStr, formatter);
+    }
+
+    /**
+     * Calculate end-date by given start-date and duration
+     *
+     * @param startDate
+     * @param duration
+     * @return
+     */
+    protected LocalDateTime getEndDate(LocalDateTime startDate, Duration duration)
+    {
+        return startDate.plusMinutes(duration.minutes);
     }
 }
