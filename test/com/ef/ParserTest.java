@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class ParserTest
@@ -16,6 +18,26 @@ public class ParserTest
 
     private static TestUtils util;
 
+    @BeforeClass
+    public static void setUpClass() throws Exception
+    {
+        clearTables();
+    }
+
+    @AfterClass
+    public static void tearDownClass() throws Exception
+    {
+        clearTables();
+    }
+    
+    private static void clearTables() throws SQLException
+    {
+        // clear all table records
+        util.executeQuery("TRUNCATE TABLE ip_activity_logs");
+        util.executeQuery("TRUNCATE TABLE blocked_ips");
+    }
+
+    
     /**
      * Test of parse method, of class ParserModel.
      */
@@ -341,7 +363,7 @@ public class ParserTest
         blockedIps.put(ipFirst, ipFirstCnt);
         blockedIps.put(ipSecond, ipSecondCnt);
         
-        LocalDateTime startDate = LocalDateTime.parse("2017-01-01 13:00:00.164", LogEntry.formatter);                        
+        LocalDateTime startDate = LocalDateTime.parse("2017-01-01 13:00:00.164", LogEntry.formatter);    
         
         // check hourly duration
         

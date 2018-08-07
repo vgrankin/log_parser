@@ -1,0 +1,33 @@
+-- replace <your_value> with your values
+
+-- Insert log entry
+
+INSERT INTO ip_activity_logs (date, ip, request, status, user_agent) VALUES ('<your_date>', INET6_ATON('<your_ip>'), '<your_request>', <your_status>, '<your_user_agent>');
+
+-- MySQL query to find IPs that mode more than a certain number of requests for a given time period.
+
+SELECT INET6_NTOA(`ip`) AS ip
+, COUNT(*) AS cnt
+FROM ip_activity_logs
+WHERE date >= '<your_start_date>' AND date < '<your_end_date>'
+GROUP BY ip
+HAVING cnt > <your_number>
+
+-- MySQL query to find requests made by a given IP.
+
+SELECT date
+, INET6_NTOA(`ip`) AS ip
+, request
+, status
+, user_agent
+FROM ip_activity_logs
+WHERE ip = INET6_ATON('<your_ip>')
+ORDER BY date ASC
+
+-- Get blocked IPs
+
+SELECT created_at
+, INET6_NTOA(`ip`) AS ip
+, reason
+FROM blocked_ips
+ORDER BY id

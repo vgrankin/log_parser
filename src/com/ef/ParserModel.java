@@ -15,8 +15,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -56,7 +54,8 @@ public class ParserModel
                     item.setDate(p[0]);
                 } catch (DateTimeParseException e) {
                     throw new IllegalArgumentException(
-                        "Unable to parse given date (" + p[0] + "). Please see LogEntry.formatter pattern for details"
+                        "Unable to parse given date (" + p[0] + "). Please see LogEntry.formatter pattern for details",
+                        e
                     );
                 }
 
@@ -67,8 +66,10 @@ public class ParserModel
 
                 return item;
             }).collect(Collectors.toList());
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
+        } catch (IOException e) {
+            throw new IllegalArgumentException(
+                "Unable to read file for given path (" + filePath + "). Please make sure it exists and is readable.", e
+            );
         }
 
         return list;
@@ -80,6 +81,7 @@ public class ParserModel
      * @param ip IP address to get requests of
      */
     public List<LogEntry> getRequestsByIP(String ip)
+        throws SQLException
     {
         String query
             = "SELECT date"
@@ -113,9 +115,8 @@ public class ParserModel
             }
             rs.close();
             ps.close();
-        } catch (SQLException ex) {
-            System.out.println("Unable to select IPs at findIPs().");
-            Logger.getLogger(ParserModel.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException e) {
+            throw new SQLException("Unable to select IPs at findIPs().", e);
         }
 
         return list;
@@ -126,7 +127,8 @@ public class ParserModel
      *
      * @param list List of LogEntry items
      */
-    protected void saveLogEntries(List<LogEntry> list)
+    public void saveLogEntries(List<LogEntry> list)
+        throws SQLException
     {
         try {
             Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);
@@ -148,9 +150,8 @@ public class ParserModel
             ps.executeBatch();
             conn.commit();
             ps.close();
-        } catch (SQLException ex) {
-            System.out.println("Unable to insert list of LogEntry items to database.");
-            Logger.getLogger(ParserModel.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException e) {
+            throw new SQLException("Unable to insert list of LogEntry items to database.", e);
         }
     }
 
@@ -164,6 +165,7 @@ public class ParserModel
      * date interval
      */
     public Map<String, Integer> findAboveThresholdIPs(LocalDateTime startDate, Duration duration, int threshold)
+        throws SQLException
     {
         LocalDateTime endDate = getEndDate(startDate, duration);
 
@@ -194,9 +196,8 @@ public class ParserModel
             }
             rs.close();
             ps.close();
-        } catch (SQLException ex) {
-            System.out.println("Unable to select IPs at findIPs().");
-            Logger.getLogger(ParserModel.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException e) {
+            throw new SQLException("Unable to select IPs at findIPs().", e);
         }
 
         return map;
@@ -211,6 +212,7 @@ public class ParserModel
      * @param threshold Threshold used to identify if IP is to-be-blocked
      */
     public void logBlockedIPs(Map<String, Integer> ipList, LocalDateTime startDate, Duration duration, int threshold)
+        throws SQLException
     {
         try {
             Connection conn = DriverManager.getConnection(Config.JDBC_URL, Config.DB_USERNAME, Config.DB_PASSWORD);
@@ -219,27 +221,26 @@ public class ParserModel
             PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO blocked_ips (ip, reason) VALUES (INET6_ATON(?), ?)"
             );
-            
+
             LocalDateTime endDate = getEndDate(startDate, duration);
             for (Map.Entry<String, Integer> entry : ipList.entrySet()) {
                 String ip = entry.getKey();
                 int cnt = entry.getValue();
                 String reason = duration.toString().toLowerCase() + " threshold (" + threshold + ") crossed "
-                    + "(" + cnt + ") in the following dates range: " 
+                    + "(" + cnt + ") in the following dates range: "
                     + LogEntry.formatter.format(startDate) + " - " + LogEntry.formatter.format(endDate);
-                
+
                 ps.setString(1, ip);
                 ps.setString(2, reason);
-                
+
                 ps.addBatch();
             }
 
             ps.executeBatch();
             conn.commit();
             ps.close();
-        } catch (SQLException ex) {
-            System.out.println("Unable to insert list of blocked IPs to database.");
-            Logger.getLogger(ParserModel.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException e) {
+            throw new SQLException("Unable to insert list of blocked IPs to database.", e);
         }
     }
 
@@ -249,7 +250,7 @@ public class ParserModel
      * @param dateStr String date having "yyyy-MM-dd.HH:mm:ss" format
      * @return LocalDateTime object
      */
-    protected LocalDateTime prepareDateArgument(String dateStr)
+    public LocalDateTime prepareDateArgument(String dateStr)
     {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_PATTERN);
         return LocalDateTime.parse(dateStr, formatter);

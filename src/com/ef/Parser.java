@@ -4,64 +4,81 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Parser
 {
 
-    private static final String[] validOptions = new String[]{"startDate", "duration", "threshold"};
-    
+    private static final String[] validOptions = new String[]{"accesslog", "startDate", "duration", "threshold"};
+    private static final String[] requiredOptions = new String[]{"startDate", "duration", "threshold"};
+
     /**
      * Retrieve command-line args, check them and output above-threshold IPs (if any)
-     * 
-     * @param args 
+     *
+     * @param args
      */
     static public void main(String[] args)
     {
-        ParserModel parser = new ParserModel();
-
-        Map<String, String> options = getOptions(args);
-        if (options.size() != validOptions.length) {
-            throw new IllegalArgumentException(
-                "All " + validOptions.length + " options are expected: " + String.join(",", validOptions)
-            );
-        }
-
-        String duration = options.get("duration").toUpperCase();
-        if (!isValidDuration(duration)) {
-            throw new IllegalArgumentException("Unknown duration: " + duration);
-        }
-
-        String startDateStr = options.get("startDate");
-        LocalDateTime startDate = null;
         try {
-            startDate = parser.prepareDateArgument(startDateStr);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException(
-                "Expected date pattern: " + ParserModel.DATE_PATTERN
-            );
-        }
+            ParserModel parser = new ParserModel();
 
-        String thresholdStr = options.get("threshold");
-        int threshold;
-        try {
-            threshold = Integer.parseInt(thresholdStr);            
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(
-                "Expected int value for threshold, actual: " + thresholdStr
-            );
-        }
-        
-        Map<String, Integer> result = parser.findAboveThresholdIPs(startDate, Duration.valueOf(duration), threshold);
-        
-        if (result.size() == 0) {
-            System.out.println("No above-threshold IPs for given arguments");
-        } else {
-            for (String ip : result.keySet()) {
-                System.out.println(ip);
+            Map<String, String> options = getOptions(args);
+
+            // process received options
+            
+            if (hasRequiredOptionsMissing(options)) {
+                throw new IllegalArgumentException(
+                    "Please provide all required options: " + String.join(",", requiredOptions)
+                );
+            }
+
+            String duration = options.get("duration");
+            if (!isValidDuration(duration.toUpperCase())) {
+                throw new IllegalArgumentException("Unknown duration: " + duration);
+            }
+
+            String startDateStr = options.get("startDate");
+            LocalDateTime startDate = null;
+            try {
+                startDate = parser.prepareDateArgument(startDateStr);
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException(
+                    "Expected date pattern: " + ParserModel.DATE_PATTERN
+                );
+            }
+
+            String thresholdStr = options.get("threshold");
+            int threshold;
+            try {
+                threshold = Integer.parseInt(thresholdStr);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                    "Expected int value for threshold, actual: " + thresholdStr
+                );
+            }
+
+            // take action based on processed options
+            // if "accesslog" option is provided, also process log file
+            if (options.containsKey("accesslog")) {
+                List<LogEntry> list = parser.parse(options.get("accesslog"));
+                parser.saveLogEntries(list);
             }
             
-            parser.logBlockedIPs(result, startDate, Duration.valueOf(duration), threshold);
+            duration = duration.toUpperCase();
+            Map<String, Integer> result = parser.findAboveThresholdIPs(startDate, Duration.valueOf(duration), threshold);
+
+            if (result.isEmpty()) {
+                System.out.println("No above-threshold IPs for given arguments");
+            } else {
+                result.keySet().forEach((ip) -> {
+                    System.out.println(ip);
+                });
+
+                parser.logBlockedIPs(result, startDate, Duration.valueOf(duration), threshold);
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
         }
     }
 
@@ -105,6 +122,12 @@ public class Parser
         return options;
     }
 
+    /**
+     * Check if given string is a valid Duration
+     * 
+     * @param duration
+     * @return true if is valid duration, false otherwise
+     */
     private static boolean isValidDuration(String duration)
     {
         for (Duration d : Duration.values()) {
@@ -113,6 +136,23 @@ public class Parser
             }
         }
 
+        return false;
+    }
+
+    /**
+     * Check given options map is missing any of the required options
+     * 
+     * @param options Options to check
+     * @return true if has missing required-options, false otherwise
+     */
+    private static boolean hasRequiredOptionsMissing(Map<String, String> options)
+    {        
+        for (String option : requiredOptions) {
+            if (!options.containsKey(option)) {
+                return true;
+            }
+        }
+        
         return false;
     }
 }
